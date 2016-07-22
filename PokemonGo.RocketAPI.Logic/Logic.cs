@@ -129,10 +129,8 @@ namespace PokemonGo.RocketAPI.Logic
             foreach (var pokemon in pokemons)
             {
                 var distance = Navigation.DistanceBetween2Coordinates(_client.CurrentLat, _client.CurrentLng, pokemon.Latitude, pokemon.Longitude);
-                if (distance > 100)
-                    await Task.Delay(15000);
-                else
-                    await Task.Delay(500);
+                
+                await Task.Delay(distance > 100 ? 15000 : 500);
 
                 await _client.UpdatePlayerLocation(pokemon.Latitude, pokemon.Longitude, _clientSettings.DefaultAltitude);
 
@@ -150,7 +148,7 @@ namespace PokemonGo.RocketAPI.Logic
             {
                 if (encounter?.CaptureProbability.CaptureProbability_.First() < 0.35)
                 {
-                    //Throw berry is we can
+                    //Throw berry if we can
                     await UseBerry(pokemon.EncounterId, pokemon.SpawnpointId);
                 }
 
@@ -170,12 +168,13 @@ namespace PokemonGo.RocketAPI.Logic
             {
                 var evolvePokemonOutProto = await _client.EvolvePokemon((ulong)pokemon.Id);
 
-                if (evolvePokemonOutProto.Result == EvolvePokemonOut.Types.EvolvePokemonStatus.PokemonEvolvedSuccess)
-                    Logger.Write($"Evolved {pokemon.PokemonId} successfully for {evolvePokemonOutProto.ExpAwarded}xp", LogLevel.Info);
-                else
-                        Logger.Write($"Failed to evolve {pokemon.PokemonId}. EvolvePokemonOutProto.Result was {evolvePokemonOutProto.Result}, stopping evolving {pokemon.PokemonId}", LogLevel.Info);
+                Logger.Write(   
+                    evolvePokemonOutProto.Result == EvolvePokemonOut.Types.EvolvePokemonStatus.PokemonEvolvedSuccess
                     
-
+                        ? $"Evolved {pokemon.PokemonId} successfully for {evolvePokemonOutProto.ExpAwarded} xp"
+                        : $"Failed to evolve {pokemon.PokemonId}. EvolvePokemonOutProto.Result was {evolvePokemonOutProto.Result}, stopping evolving {pokemon.PokemonId}",
+                    LogLevel.Info);
+                    
                 await Task.Delay(3000);
             }
         }
@@ -210,49 +209,33 @@ namespace PokemonGo.RocketAPI.Logic
         {
             var pokemonCp = pokemon?.PokemonData?.Cp;
 
-            var pokeBallsCount = await _inventory.GetItemAmountByType(MiscEnums.Item.ITEM_POKE_BALL);
-            var greatBallsCount = await _inventory.GetItemAmountByType(MiscEnums.Item.ITEM_GREAT_BALL);
-            var ultraBallsCount = await _inventory.GetItemAmountByType(MiscEnums.Item.ITEM_ULTRA_BALL);
-            var masterBallsCount = await _inventory.GetItemAmountByType(MiscEnums.Item.ITEM_MASTER_BALL);
-
-            if (masterBallsCount > 0 && pokemonCp >= 1000)
+            var items = await _inventory.GetItems();
+            var balls = items.Where(i => (MiscEnums.Item)i.Item_ == MiscEnums.Item.ITEM_POKE_BALL
+                                    || (MiscEnums.Item)i.Item_ == MiscEnums.Item.ITEM_MASTER_BALL
+                                    || (MiscEnums.Item)i.Item_ == MiscEnums.Item.ITEM_ULTRA_BALL
+                                    || (MiscEnums.Item)i.Item_ == MiscEnums.Item.ITEM_GREAT_BALL).GroupBy(i => ((MiscEnums.Item)i.Item_)).ToList();
+                
+            if (balls.Any(g => g.Key == MiscEnums.Item.ITEM_MASTER_BALL) && pokemonCp >= 1000)    
                 return MiscEnums.Item.ITEM_MASTER_BALL;
-            else if (ultraBallsCount > 0 && pokemonCp >= 1000)
+                
+            if (balls.Any(g => g.Key == MiscEnums.Item.ITEM_ULTRA_BALL) && pokemonCp >= 600)
                 return MiscEnums.Item.ITEM_ULTRA_BALL;
-            else if (greatBallsCount > 0 && pokemonCp >= 1000)
+                
+            if (balls.Any(g => g.Key == MiscEnums.Item.ITEM_GREAT_BALL) && pokemonCp >= 350)
                 return MiscEnums.Item.ITEM_GREAT_BALL;
-
-            if (ultraBallsCount > 0 && pokemonCp >= 600)
-                return MiscEnums.Item.ITEM_ULTRA_BALL;
-            else if (greatBallsCount > 0 && pokemonCp >= 600)
-                return MiscEnums.Item.ITEM_GREAT_BALL;
-
-            if (greatBallsCount > 0 && pokemonCp >= 350)
-                return MiscEnums.Item.ITEM_GREAT_BALL;
-
-            if (pokeBallsCount > 0)
-                return MiscEnums.Item.ITEM_POKE_BALL;
-            if (greatBallsCount > 0)
-                return MiscEnums.Item.ITEM_GREAT_BALL;
-            if (ultraBallsCount > 0)
-                return MiscEnums.Item.ITEM_ULTRA_BALL;
-            if (masterBallsCount > 0)
-                return MiscEnums.Item.ITEM_MASTER_BALL;
-
-            return MiscEnums.Item.ITEM_POKE_BALL;
+            
+            return balls.OrderBy(g => g.Key).First().Key;
         }
 
         public async Task UseBerry(ulong encounterId, string spawnPointId)
         {
             var inventoryBalls = await _inventory.GetItems();
-            var berries = inventoryBalls.Where(p => (ItemId) p.Item_ == ItemId.ItemRazzBerry);
-            var berry = berries.FirstOrDefault();
+            var berries = inventoryBalls.Count(p => (ItemId) p.Item_ == ItemId.ItemRazzBerry);
 
-            if (berry == null)
-                return;
+            if (berries == 0) return;
             
-            var useRaspberry = await _client.UseCaptureItem(encounterId, AllEnum.ItemId.ItemRazzBerry, spawnPointId);
-            Logger.Write($"Use Rasperry. Remaining: {berry.Count}", LogLevel.Info);
+            await _client.UseCaptureItem(encounterId, AllEnum.ItemId.ItemRazzBerry, spawnPointId);
+            Logger.Write($"Use Rasperry. Remaining: {berries}", LogLevel.Info);
             await Task.Delay(3000);
         }
     }
