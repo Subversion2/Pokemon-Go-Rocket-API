@@ -56,10 +56,7 @@ namespace PokemonGo.RocketAPI.Logic
                 try
                 {
                     await _client.SetServer();
-
-                    var inventory = await _client.GetInventory();
-                    var playerStats = inventory.InventoryDelta.InventoryItems.Select(i => i.InventoryItemData).FirstOrDefault(i => i.PlayerStats != null);
-                    
+                    await DisplayPlayerLevelInTitle();
                     await EvolveAllPokemonWithEnoughCandy();
                     await TransferDuplicatePokemon();
                     await RecycleItems();
@@ -99,6 +96,20 @@ namespace PokemonGo.RocketAPI.Logic
                 await action();
         }
 
+        private async Task DisplayPlayerLevelInTitle()
+        {
+            var stats = await _inventory.GetPlayerStats();
+            PlayerStats stat = stats.FirstOrDefault();
+            if (stat != null)
+            {
+                System.Console.Title = string.Format("Player level {0:0} - ({1:0} / {2:0})",
+                     +stat.Level,
+                     +(stat.Experience - stat.PrevLevelXp),
+                     +(stat.NextLevelXp - stat.PrevLevelXp));
+            }
+            await Task.Delay(5000);
+        }
+        
         private async Task ExecuteFarmingPokestopsAndPokemons()
         {
             var mapObjects = await _client.GetMapObjects();
@@ -113,6 +124,10 @@ namespace PokemonGo.RocketAPI.Logic
                 var fortSearch = await _client.SearchFort(pokeStop.Id, pokeStop.Latitude, pokeStop.Longitude);
                 Logger.Write($"Using Pokestop: {fortInfo.Name} in {Math.Round(distance)}m distance");
                 Logger.Write($"Farmed XP: {fortSearch.ExperienceAwarded}, Gems: { fortSearch.GemsAwarded}, Eggs: {fortSearch.PokemonDataEgg} Items: {StringUtils.GetSummedFriendlyNameOfItemAwardList(fortSearch.ItemsAwarded)}", LogLevel.Info);
+                if (fortSearch.ExperienceAwarded > 0)
+                {
+                    await DisplayPlayerLevelInTitle();
+                }
                 await Task.Delay(1000);
                 await RecycleItems();
                 await ExecuteCatchAllNearbyPokemons();
@@ -159,11 +174,17 @@ namespace PokemonGo.RocketAPI.Logic
                 await Task.Delay(2000);
             }
             while (caughtPokemonResponse.Status == CatchPokemonResponse.Types.CatchStatus.CatchMissed || caughtPokemonResponse.Status == CatchPokemonResponse.Types.CatchStatus.CatchEscape) ;
+            if (caughtPokemonResponse.Status == CatchPokemonResponse.Types.CatchStatus.CatchSuccess)
+            {
+                await DisplayPlayerLevelInTitle();
+            }
+            
         }
 
         private async Task EvolveAllPokemonWithEnoughCandy()
         {
             var pokemonToEvolve = await _inventory.GetPokemonToEvolve();
+            int pokemonEvolved = 0;
             foreach (var pokemon in pokemonToEvolve)
             {
                 var evolvePokemonOutProto = await _client.EvolvePokemon((ulong)pokemon.Id);
@@ -190,6 +211,10 @@ namespace PokemonGo.RocketAPI.Logic
                 var transfer = await _client.TransferPokemon(duplicatePokemon.Id);
                 Logger.Write($"Transfer {duplicatePokemon.PokemonId} with {duplicatePokemon.Cp} CP (Best: {bestPokemonOfType})", LogLevel.Info);
                 await Task.Delay(500);
+            }
+            if (pokemonEvolved > 0)
+            {
+                await DisplayPlayerLevelInTitle();
             }
         }
 
