@@ -17,7 +17,9 @@ namespace PokemonGo.RocketAPI.Console
         public double DefaultLatitude => UserSettings.Default.DefaultLatitude;
         public double DefaultLongitude => UserSettings.Default.DefaultLongitude;
         public double DefaultAltitude => UserSettings.Default.DefaultLongitude;
-
+        public float KeepMinIVPercentage => UserSettings.Default.KeepMinIVPercentage;
+        public int KeepMinCP => UserSettings.Default.KeepMinCP;
+        
         ICollection<KeyValuePair<ItemId, int>> ISettings.itemRecycleFilter
         {
             get
