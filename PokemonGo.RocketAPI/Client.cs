@@ -67,6 +67,9 @@ namespace PokemonGo.RocketAPI
             
             if (AccessToken == null)
             {
+                // pop up a browser so the user can complete the auth
+                System.Diagnostics.Process.Start("https://www.google.com/device");
+ 
                 var deviceCode = await GoogleLogin.GetDeviceCode();
                 tokenResponse = await GoogleLogin.GetAccessToken(deviceCode);
                 _settings.GoogleRefreshToken = tokenResponse?.refresh_token;
