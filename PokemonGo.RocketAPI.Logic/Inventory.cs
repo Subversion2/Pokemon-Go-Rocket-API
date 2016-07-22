@@ -121,7 +121,13 @@ namespace PokemonGo.RocketAPI.Logic
 
             return pokemonToEvolve;
         }
-        
+        public async Task<IEnumerable<PlayerStats>> GetPlayerStats()
+        {
+            var inventory = await _client.GetInventory();
+            return inventory.InventoryDelta.InventoryItems
+                .Select(i => i.InventoryItemData?.PlayerStats)
+                .Where(p => p != null);
+        }  
 
 
         public async Task<IEnumerable<Item>> GetItems()
